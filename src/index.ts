@@ -2,6 +2,7 @@ import joplin from 'api';
 import { MenuItemLocation, SettingItemType } from 'api/types';
 import { OmnivoreClient } from './omnivoreClient';
 import { syncArticles } from './sync';
+import { logger } from './logger';
 import TurndownService from 'turndown';
 
 const turndownService = new TurndownService({
@@ -12,12 +13,18 @@ const turndownService = new TurndownService({
 // Custom rule to handle headings
 turndownService.addRule('heading', {
     filter: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-    replacement: function (content, node, options) {
+    replacement: function(content, node, options) {
         const hLevel = Number(node.nodeName.charAt(1));
         const cleanContent = content.replace(/\[]\([^)]+\)/g, '');
         return '\n\n' + '#'.repeat(hLevel) + ' ' + cleanContent.trim() + '\n\n';
     }
 });
+
+enum LogLevel {
+    ErrorOnly = 'error',
+    ErrorsAndWarnings = 'warn',
+    Debug = 'debug'
+}
 
 joplin.plugins.register({
     onStart: async function() {
@@ -33,20 +40,6 @@ joplin.plugins.register({
                 section: 'omnivoreSync',
                 public: true,
                 label: 'Omnivore API Key'
-            },
-            'lastSyncDate': {
-                value: '',
-                type: SettingItemType.String,
-                section: 'omnivoreSync',
-                public: false,
-                label: 'Last Sync Date'
-            },
-            'syncedItems': {
-                value: '[]',
-                type: SettingItemType.String,
-                section: 'omnivoreSync',
-                public: false,
-                label: 'Synced Items'
             },
             'syncType': {
                 value: 'all',
@@ -78,6 +71,14 @@ joplin.plugins.register({
                 label: 'Target Notebook',
                 description: 'Name of the notebook to sync Omnivore articles to'
             },
+            'userTimezone': {
+                value: 'local',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Your Timezone',
+                description: 'Enter your timezone (e.g., "America/New_York", "Europe/London", or "local" for system timezone)'
+            },
             'highlightTemplateChoice': {
                 value: 'default',
                 type: SettingItemType.String,
@@ -88,23 +89,75 @@ joplin.plugins.register({
                 isEnum: true,
                 options: {
                     default: 'Default',
-                    minimal: 'Minimal',
-                    detailed: 'Detailed'
+                    minimal: 'Minimal'
                 }
-            }
+            },
+            'highlightSyncPeriod': {
+                value: 14,
+                type: SettingItemType.Int,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Highlight Sync Period (days)',
+                description: 'Number of days to look back for new highlights'
+            },
+            'highlightTitlePrefix': {
+                value: 'Omnivore Highlights',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Highlight Note Title Prefix',
+                description: 'Prefix for the title of highlight notes (followed by the date)'
+            },
+            'logLevel': {
+                value: LogLevel.ErrorsAndWarnings,
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Log Level',
+                description: 'Set the level of logging detail',
+                isEnum: true,
+                options: {
+                    [LogLevel.ErrorOnly]: 'Errors only',
+                    [LogLevel.ErrorsAndWarnings]: 'Errors and Warnings',
+                    [LogLevel.Debug]: 'Debug (verbose)'
+                }
+            },
+            'lastSyncDate': {
+                value: '',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: false,
+                label: 'Last Sync Date'
+            },
+            'syncedItems': {
+                value: '[]',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: false,
+                label: 'Synced Items'
+            },
+            'syncedHighlights': {
+                value: '{}',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: false,
+                label: 'Synced Highlights',
+                description: 'Internal use: Stores information about synced highlights'
+            },
         });
 
         await joplin.commands.register({
             name: 'resetOmnivoreSyncData',
             label: 'Reset Omnivore Sync Data',
             execute: async () => {
-                const result = await joplin.views.dialogs.showMessageBox('Are you sure you want to reset the Omnivore sync data? This will clear the last sync date and all synced item IDs. The next sync will fetch all articles again.\n\nPress OK to confirm, or Cancel to abort.');
+                const result = await joplin.views.dialogs.showMessageBox('Are you sure you want to reset the Omnivore sync data? This will clear the last sync date, all synced item IDs, and synced highlights. The next sync will fetch all articles and highlights again.\n\nPress OK to confirm, or Cancel to abort.');
 
                 if (result === 0) { // User clicked 'OK'
                     await joplin.settings.setValue('lastSyncDate', '');
                     await joplin.settings.setValue('syncedItems', '[]');
+                    await joplin.settings.setValue('syncedHighlights', '{}');
                     console.log('Omnivore sync data has been reset.');
-                    await joplin.views.dialogs.showMessageBox('Omnivore sync data has been reset. The next sync will fetch all articles.');
+                    await joplin.views.dialogs.showMessageBox('Omnivore sync data has been reset. The next sync will fetch all articles and highlights.');
                 } else {
                     console.log('Reset operation cancelled by user.');
                 }
