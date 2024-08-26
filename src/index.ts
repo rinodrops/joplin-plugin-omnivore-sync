@@ -2,8 +2,8 @@ import joplin from 'api';
 import { MenuItemLocation, SettingItemType } from 'api/types';
 import { OmnivoreClient } from './omnivoreClient';
 import { syncArticles } from './sync';
-import { logger } from './logger';
 import TurndownService from 'turndown';
+import { logger, LogLevel } from './logger';
 
 const turndownService = new TurndownService({
     headingStyle: 'atx',
@@ -19,12 +19,6 @@ turndownService.addRule('heading', {
         return '\n\n' + '#'.repeat(hLevel) + ' ' + cleanContent.trim() + '\n\n';
     }
 });
-
-enum LogLevel {
-    ErrorOnly = 'error',
-    ErrorsAndWarnings = 'warn',
-    Debug = 'debug'
-}
 
 joplin.plugins.register({
     onStart: async function() {
@@ -71,14 +65,6 @@ joplin.plugins.register({
                 label: 'Target Notebook',
                 description: 'Name of the notebook to sync Omnivore articles to'
             },
-            'userTimezone': {
-                value: 'local',
-                type: SettingItemType.String,
-                section: 'omnivoreSync',
-                public: true,
-                label: 'Your Timezone',
-                description: 'Enter your timezone (e.g., "America/New_York", "Europe/London", or "local" for system timezone)'
-            },
             'highlightTemplateChoice': {
                 value: 'default',
                 type: SettingItemType.String,
@@ -89,8 +75,17 @@ joplin.plugins.register({
                 isEnum: true,
                 options: {
                     default: 'Default',
-                    minimal: 'Minimal'
+                    minimal: 'Minimal',
+                    detailed: 'Detailed'
                 }
+            },
+            'userTimezone': {
+                value: 'local',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Your Timezone',
+                description: 'Enter your timezone (e.g., "America/New_York", "Europe/London", or "local" for system timezone)'
             },
             'highlightSyncPeriod': {
                 value: 14,
@@ -107,20 +102,6 @@ joplin.plugins.register({
                 public: true,
                 label: 'Highlight Note Title Prefix',
                 description: 'Prefix for the title of highlight notes (followed by the date)'
-            },
-            'logLevel': {
-                value: LogLevel.ErrorsAndWarnings,
-                type: SettingItemType.String,
-                section: 'omnivoreSync',
-                public: true,
-                label: 'Log Level',
-                description: 'Set the level of logging detail',
-                isEnum: true,
-                options: {
-                    [LogLevel.ErrorOnly]: 'Errors only',
-                    [LogLevel.ErrorsAndWarnings]: 'Errors and Warnings',
-                    [LogLevel.Debug]: 'Debug (verbose)'
-                }
             },
             'lastSyncDate': {
                 value: '',
@@ -144,6 +125,20 @@ joplin.plugins.register({
                 label: 'Synced Highlights',
                 description: 'Internal use: Stores information about synced highlights'
             },
+            'logLevel': {
+                value: LogLevel.ErrorsAndWarnings,
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Log Level',
+                description: 'Set the level of logging detail',
+                isEnum: true,
+                options: {
+                    [LogLevel.ErrorOnly]: 'Errors only',
+                    [LogLevel.ErrorsAndWarnings]: 'Errors and Warnings',
+                    [LogLevel.Debug]: 'Debug (verbose)'
+                }
+            },
         });
 
         await joplin.commands.register({
@@ -156,10 +151,10 @@ joplin.plugins.register({
                     await joplin.settings.setValue('lastSyncDate', '');
                     await joplin.settings.setValue('syncedItems', '[]');
                     await joplin.settings.setValue('syncedHighlights', '{}');
-                    console.log('Omnivore sync data has been reset.');
+                    await logger.debug('Omnivore sync data has been reset.');
                     await joplin.views.dialogs.showMessageBox('Omnivore sync data has been reset. The next sync will fetch all articles and highlights.');
                 } else {
-                    console.log('Reset operation cancelled by user.');
+                    await logger.debug('Reset operation cancelled by user.');
                 }
             }
         });
@@ -170,7 +165,7 @@ joplin.plugins.register({
             execute: async () => {
                 const apiKey = await joplin.settings.value('omnivoreApiKey');
                 if (!apiKey) {
-                    console.error('Omnivore API key not set. Please set your API key in the plugin settings.');
+                    await logger.error('Omnivore API key not set. Please set your API key in the plugin settings.');
                     return;
                 }
                 const client = new OmnivoreClient(apiKey);
@@ -199,6 +194,6 @@ joplin.plugins.register({
             await setupScheduledSync();
         });
 
-        console.log('Omnivore Sync plugin started');
+        await logger.debug('Omnivore Sync plugin started');
     }
 });

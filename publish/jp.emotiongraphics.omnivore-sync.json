@@ -16,6 +16,6 @@
 		"productivity"
 	],
 	"screenshots": [],
-	"_publish_hash": "sha256:aeea7da8be6ede43d034a25ba12a1c0066d45e98ca375a2efa7158ae2aac22e1",
-	"_publish_commit": "bugfix-duplicate-sync:4c4b03487fdeec1775dce0261c96895f264c82af"
+	"_publish_hash": "sha256:0da2958911fa9ca247b23cc1b9f506d009e603f524db13b84d3dbff76a78e719",
+	"_publish_commit": "bugfix-duplicate-sync:3d912c8d2de0415b88034eb1dce8520fcbe18a03"
 }

@@ -14,10 +14,10 @@ export class OmnivoreClient {
     async getArticles(since: string): Promise < any[] > {
         try {
             const sinceDate = since ? new Date(since).toISOString().split('T')[0] : '';
-            console.log(`Fetching articles since: ${sinceDate || 'the beginning'}`);
+            await logger.debug(`Fetching articles since: ${sinceDate || 'the beginning'}`);
 
             const query = `${sinceDate ? `saved:${sinceDate}..*` : ''} sort:saved-asc`;
-            console.log(`Using query: ${query}`);
+            await logger.debug(`Using query: ${query}`);
 
             let allArticles: any[] = [];
             let hasNextPage = true;
@@ -43,13 +43,13 @@ export class OmnivoreClient {
                 hasNextPage = response.pageInfo.hasNextPage;
                 after = response.pageInfo.endCursor;
 
-                console.log(`Fetched ${allArticles.length} articles so far`);
+                await logger.debug(`Fetched ${allArticles.length} articles so far`);
             }
 
-            console.log(`Total articles fetched: ${allArticles.length}`);
+            await logger.debug(`Total articles fetched: ${allArticles.length}`);
             return allArticles;
         } catch (error) {
-            console.error(`Error fetching articles from Omnivore: ${error.message}`);
+            await logger.error(`Error fetching articles from Omnivore: ${error.message}`);
             throw error;
         }
     }
@@ -63,10 +63,10 @@ export class OmnivoreClient {
             const queryDate = oldestDate < sinceDate ? oldestDate : sinceDate;
             const formattedDate = queryDate.toISOString().split('T')[0];
 
-            console.log(`Fetching highlights for articles saved since: ${formattedDate}`);
+            await logger.debug(`Fetching highlights for articles saved since: ${formattedDate}`);
 
             const query = `saved:${formattedDate}..* sort:saved-asc has:highlights`;
-            console.log(`Using query: ${query}`);
+            await logger.debug(`Using query: ${query}`);
 
             let allHighlights: any[] = [];
             let hasNextPage = true;
@@ -107,13 +107,13 @@ export class OmnivoreClient {
                 hasNextPage = response.pageInfo.hasNextPage;
                 after = response.pageInfo.endCursor;
 
-                console.log(`Fetched ${allHighlights.length} highlights so far`);
+                await logger.debug(`Fetched ${allHighlights.length} highlights so far`);
             }
 
-            console.log(`Total highlights fetched: ${allHighlights.length}`);
+            await logger.debug(`Total highlights fetched: ${allHighlights.length}`);
             return allHighlights;
         } catch (error) {
-            console.error(`Error fetching highlights from Omnivore: ${error.message}`);
+            await logger.error(`Error fetching highlights from Omnivore: ${error.message}`);
             throw error;
         }
     }

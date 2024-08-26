@@ -1,6 +1,6 @@
 import joplin from 'api';
 
-enum LogLevel {
+export enum LogLevel {
     ErrorOnly = 'error',
     ErrorsAndWarnings = 'warn',
     Debug = 'debug'
