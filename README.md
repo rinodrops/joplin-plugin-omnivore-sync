@@ -33,6 +33,9 @@ After installation, you need to configure the plugin:
    - Sync Interval (in minutes, 0 for manual sync only)
    - Target Notebook (where synced content will be saved)
    - Highlight Template (choose from predefined templates)
+   - Timezone ("local" for system timezone)
+   - Highlight Sync Period (days)
+   - Highlight Note Title Prefix (followed by the date)
 
 ## Usage
 

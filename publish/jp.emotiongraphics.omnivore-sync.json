@@ -2,7 +2,7 @@
 	"manifest_version": 1,
 	"id": "jp.emotiongraphics.omnivore-sync",
 	"app_min_version": "2.13",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"name": "Omnivore Sync",
 	"description": "Sync articles and highlights from Omnivore to Joplin",
 	"author": "Rino",
@@ -16,6 +16,6 @@
 		"productivity"
 	],
 	"screenshots": [],
-	"_publish_hash": "sha256:3091fedba3ca08e1b6fe7b61f8a1686106ee63b0fcf07044484426e4d3f7ca29",
-	"_publish_commit": "refactor:4fd3f583b702506656b433d9a394b266e64c700e"
+	"_publish_hash": "sha256:c8a624fa520b0bf49c55ca66e50a18b651c96db64445e784eb73ce512d79192c",
+	"_publish_commit": "main:1ad065e5aaee5c687e8b97b6dc9c3ae45fbce5e5"
 }

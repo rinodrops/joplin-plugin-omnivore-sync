@@ -1,3 +1,6 @@
+// logger.ts
+// Aug 2024 by Rino, eMotionGraphics Inc.
+
 import joplin from 'api';
 
 export enum LogLevel {

@@ -1,4 +1,4 @@
-// src/sync/highlight.ts
+// sync/highlight.ts
 // Aug 2024 by Rino, eMotionGraphics Inc.
 
 import joplin from 'api';
@@ -22,11 +22,9 @@ const HIGHLIGHT_TEMPLATES = {
 **URL**: [Omnivore]({{article.omnivoreUrl}}), [Original]({{article.originalArticleUrl}})
     `,
     minimal: `
-> {{quote}}
-
-{{#annotation}}{{annotation}}{{/annotation}}
-
-[Source]({{article.url}})
+[{{article.title}}]({{article.omnivoreUrl}})
+> {{quote}}{{#annotation}}
+> **Note**: {{annotation}}{{/annotation}}
     `
 };
 

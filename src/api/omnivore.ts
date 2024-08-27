@@ -1,4 +1,4 @@
-// src/api/omnivore.ts
+// api/omnivore.ts
 // Aug 2024 by Rino, eMotionGraphics Inc.
 
 import { Omnivore, Item, Highlight as OmnivoreHighlight } from '@omnivore-app/api';

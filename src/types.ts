@@ -1,4 +1,4 @@
-// src/types.ts: Type definition
+// types.ts: Type definition
 // Aug 2024 by Rino, eMotionGraphics Inc.
 
 import { Item as OmnivoreItem, Highlight as OmnivoreHighlight } from '@omnivore-app/api';

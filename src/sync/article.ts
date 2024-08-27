@@ -1,4 +1,4 @@
-// src/sync/article.ts
+// sync/article.ts
 // Aug 2024 by Rino, eMotionGraphics Inc.
 
 import joplin from 'api';
