@@ -13,14 +13,17 @@ This plugin allows you to sync your [Omnivore](https://omnivore.app/) articles a
 
 ## Installation
 
-Note: Currently, this plugin is not published in the marketplace.
-Copy `publish/jp.emotiongraphics.omnivore-sync.jpl` file to your `plugin` directory.
-(It is `~/.config/joplin-desktop/plugins` on macOS)
+### Marketplace
 
 1. Open Joplin and navigate to Tools > Options > Plugins
 2. Search for "Omnivore Sync" in the plugins marketplace
 3. Click on Install
 4. Restart Joplin to activate the plugin
+
+### Manual
+
+Copy `publish/jp.emotiongraphics.omnivore-sync.jpl` file to your `plugin` directory.
+(It is `~/.config/joplin-desktop/plugins` on macOS)
 
 ## Configuration
 
@@ -55,9 +58,8 @@ If you need to reset the sync data (e.g., to re-sync all content), go to Tools >
 
 The plugin offers three predefined templates for formatting highlights:
 
-1. Default: Includes the article title, quote, link to the highlight, creation date, and annotation
+1. Default: Includes a full markdown layout with the article title, quote, source link, creation date, and annotation
 2. Minimal: Includes only the quote, annotation (if any), and a link to the source
-3. Detailed: Includes a full markdown layout with the article title, quote, source link, creation date, and annotation
 
 ## Contributing
 
