@@ -1,9 +1,14 @@
+// src/index.ts
+// Aug 2024 by Rino, eMotionGraphics Inc.
+
 import joplin from 'api';
 import { MenuItemLocation, SettingItemType } from 'api/types';
-import { OmnivoreClient } from './omnivoreClient';
-import { syncArticles } from './sync';
+import { OmnivoreClient } from './api/omnivore';
+import { syncArticles, cleanupOldArticles } from './sync/article';
+import { syncHighlights, cleanupHighlightNotes } from './sync/highlight';
 import TurndownService from 'turndown';
 import { logger, LogLevel } from './logger';
+import { SyncType } from './types';
 
 const turndownService = new TurndownService({
     headingStyle: 'atx',
@@ -36,7 +41,7 @@ joplin.plugins.register({
                 label: 'Omnivore API Key'
             },
             'syncType': {
-                value: 'all',
+                value: SyncType.All,
                 type: SettingItemType.String,
                 section: 'omnivoreSync',
                 public: true,
@@ -50,7 +55,7 @@ joplin.plugins.register({
                 }
             },
             'syncInterval': {
-                value: '0',
+                value: 0,
                 type: SettingItemType.Int,
                 section: 'omnivoreSync',
                 public: true,
@@ -76,7 +81,6 @@ joplin.plugins.register({
                 options: {
                     default: 'Default',
                     minimal: 'Minimal',
-                    detailed: 'Detailed'
                 }
             },
             'userTimezone': {
@@ -110,12 +114,12 @@ joplin.plugins.register({
                 public: false,
                 label: 'Last Sync Date'
             },
-            'syncedItems': {
+            'syncedArticles': {
                 value: '[]',
                 type: SettingItemType.String,
                 section: 'omnivoreSync',
                 public: false,
-                label: 'Synced Items'
+                label: 'Synced Articles'
             },
             'syncedHighlights': {
                 value: '{}',
@@ -149,7 +153,7 @@ joplin.plugins.register({
 
                 if (result === 0) { // User clicked 'OK'
                     await joplin.settings.setValue('lastSyncDate', '');
-                    await joplin.settings.setValue('syncedItems', '[]');
+                    await joplin.settings.setValue('syncedArticles', '[]');
                     await joplin.settings.setValue('syncedHighlights', '{}');
                     await logger.debug('Omnivore sync data has been reset.');
                     await joplin.views.dialogs.showMessageBox('Omnivore sync data has been reset. The next sync will fetch all articles and highlights.');
@@ -168,8 +172,8 @@ joplin.plugins.register({
                     await logger.error('Omnivore API key not set. Please set your API key in the plugin settings.');
                     return;
                 }
-                const client = new OmnivoreClient(apiKey);
-                await syncArticles(client, turndownService);
+                const client = new OmnivoreClient({ apiKey, baseUrl: 'https://api-prod.omnivore.app' });
+                await performSync(client);
             },
         });
 
@@ -182,8 +186,8 @@ joplin.plugins.register({
                 setInterval(async () => {
                     const apiKey = await joplin.settings.value('omnivoreApiKey');
                     if (apiKey) {
-                        const client = new OmnivoreClient(apiKey);
-                        await syncArticles(client, turndownService);
+                        const client = new OmnivoreClient({ apiKey, baseUrl: 'https://api-prod.omnivore.app' });
+                        await performSync(client);
                     }
                 }, interval * 60 * 1000);
             }
@@ -197,3 +201,47 @@ joplin.plugins.register({
         await logger.debug('Omnivore Sync plugin started');
     }
 });
+
+async function performSync(client: OmnivoreClient) {
+    await logger.info('Starting Omnivore sync');
+    let lastSyncDate = await joplin.settings.value('lastSyncDate');
+    const syncType = await joplin.settings.value('syncType') as SyncType;
+    const highlightSyncPeriod = await joplin.settings.value('highlightSyncPeriod');
+
+    if (!lastSyncDate) {
+        lastSyncDate = new Date(0).toISOString();
+        await logger.info('Last sync date was reset or not set. Using earliest possible date.');
+    }
+
+    await logger.debug(`Last sync date: ${lastSyncDate}`);
+    await logger.debug(`Sync type: ${syncType}`);
+
+    try {
+        let newLastSyncDate = lastSyncDate;
+
+        if (syncType === SyncType.All || syncType === SyncType.Articles) {
+            const articleResult = await syncArticles(client, turndownService, lastSyncDate);
+            newLastSyncDate = articleResult.newLastSyncDate;
+            await joplin.settings.setValue('syncedArticles', JSON.stringify(articleResult.syncedArticles));
+        }
+
+        if (syncType === SyncType.All || syncType === SyncType.Highlights) {
+            const highlightResult = await syncHighlights(client, turndownService, lastSyncDate, highlightSyncPeriod);
+            if (new Date(highlightResult.newLastSyncDate) > new Date(newLastSyncDate)) {
+                newLastSyncDate = highlightResult.newLastSyncDate;
+            }
+            await joplin.settings.setValue('syncedHighlights', JSON.stringify(highlightResult.syncedHighlights));
+        }
+
+        await cleanupHighlightNotes();
+
+        const syncedArticles = JSON.parse(await joplin.settings.value('syncedArticles') || '[]');
+        const cleanedArticles = await cleanupOldArticles(syncedArticles);
+        await joplin.settings.setValue('syncedArticles', JSON.stringify(cleanedArticles));
+
+        await joplin.settings.setValue('lastSyncDate', newLastSyncDate);
+        await logger.info(`Sync completed. New last sync date: ${newLastSyncDate}`);
+    } catch (error) {
+        await logger.error(`Error during sync: ${error.message}`);
+    }
+}

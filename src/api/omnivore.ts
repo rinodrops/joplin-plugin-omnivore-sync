@@ -1,17 +1,18 @@
-import { Omnivore } from '@omnivore-app/api'
-import { logger } from './logger';
+// src/api/omnivore.ts
+// Aug 2024 by Rino, eMotionGraphics Inc.
+
+import { Omnivore, Item, Highlight as OmnivoreHighlight } from '@omnivore-app/api';
+import { Article, Highlight, OmnivoreClientConfig } from '../types';
+import { logger } from '../logger';
 
 export class OmnivoreClient {
     private client: Omnivore;
 
-    constructor(apiKey: string) {
-        this.client = new Omnivore({
-            apiKey: apiKey,
-            baseUrl: 'https://api-prod.omnivore.app',
-        });
+    constructor(config: OmnivoreClientConfig) {
+        this.client = new Omnivore(config);
     }
 
-    async getArticles(since: string): Promise < any[] > {
+    async getArticles(since: string): Promise<Article[]> {
         try {
             const sinceDate = since ? new Date(since).toISOString().split('T')[0] : '';
             await logger.debug(`Fetching articles since: ${sinceDate || 'the beginning'}`);
@@ -19,7 +20,7 @@ export class OmnivoreClient {
             const query = `${sinceDate ? `saved:${sinceDate}..*` : ''} sort:saved-asc`;
             await logger.debug(`Using query: ${query}`);
 
-            let allArticles: any[] = [];
+            let allArticles: Article[] = [];
             let hasNextPage = true;
             let after: string | null = null;
 
@@ -35,10 +36,16 @@ export class OmnivoreClient {
                     break;
                 }
 
-                allArticles = allArticles.concat(response.edges.map(edge => ({
-                    ...edge.node,
-                    labels: edge.node.labels || []
-                })));
+                allArticles = allArticles.concat(response.edges.map(edge => {
+                    const item = edge.node as Item;
+                    return {
+                        ...item,
+                        hash: (item as any).hash,
+                        createdAt: (item as any).createdAt || item.savedAt,
+                        readingProgressAnchorIndex: (item as any).readingProgressAnchorIndex,
+                        folder: (item as any).folder
+                    } as Article;
+                }));
 
                 hasNextPage = response.pageInfo.hasNextPage;
                 after = response.pageInfo.endCursor;
@@ -54,7 +61,7 @@ export class OmnivoreClient {
         }
     }
 
-    async getHighlights(since: string, syncPeriod: number): Promise < any[] > {
+    async getHighlights(since: string, syncPeriod: number): Promise<Highlight[]> {
         try {
             const sinceDate = new Date(since);
             const oldestDate = new Date();
@@ -68,7 +75,7 @@ export class OmnivoreClient {
             const query = `saved:${formattedDate}..* sort:saved-asc has:highlights`;
             await logger.debug(`Using query: ${query}`);
 
-            let allHighlights: any[] = [];
+            let allHighlights: Highlight[] = [];
             let hasNextPage = true;
             let after: string | null = null;
 
@@ -86,18 +93,24 @@ export class OmnivoreClient {
 
                 const highlights = response.edges.flatMap(edge => {
                     if (edge.node.highlights) {
-                        return edge.node.highlights.map(highlight => ({
-                            ...highlight,
-                            article: {
-                                id: edge.node.id,
-                                title: edge.node.title,
-                                url: edge.node.url,
-                                originalArticleUrl: edge.node.originalArticleUrl,
-                                savedAt: edge.node.savedAt,
-                                author: edge.node.author,
-                                publishedAt: edge.node.publishedAt
-                            }
-                        }));
+                        return edge.node.highlights.map(highlight => {
+                            const omnivoreHighlight = highlight as OmnivoreHighlight;
+                            return {
+                                ...omnivoreHighlight,
+                                shortId: (omnivoreHighlight as any).shortId,
+                                createdAt: (omnivoreHighlight as any).createdAt || new Date().toISOString(),
+                                article: {
+                                    id: edge.node.id,
+                                    title: edge.node.title,
+                                    url: edge.node.url,
+                                    originalArticleUrl: edge.node.originalArticleUrl,
+                                    savedAt: edge.node.savedAt,
+                                    author: edge.node.author,
+                                    publishedAt: edge.node.publishedAt,
+                                    slug: edge.node.slug
+                                }
+                            } as Highlight;
+                        });
                     }
                     return [];
                 });
