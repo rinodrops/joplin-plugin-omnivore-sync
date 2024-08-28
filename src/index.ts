@@ -86,6 +86,19 @@ joplin.plugins.register({
                 label: 'Highlight Labels',
                 description: 'Comma-separated list of labels for highlights to sync (leave empty to sync all)'
             },
+            'highlightGrouping': {
+                value: 'byDate',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Highlight Grouping',
+                description: 'Choose how to group highlights',
+                isEnum: true,
+                options: {
+                    'byDate': 'By Date',
+                    'byArticle': 'By Article'
+                }
+            },
             'highlightTemplateChoice': {
                 value: 'default',
                 type: SettingItemType.String,
@@ -96,7 +109,8 @@ joplin.plugins.register({
                 isEnum: true,
                 options: {
                     default: 'Default',
-                    minimal: 'Minimal',
+                    titleQuote: 'Title, Highlight and Note',
+                    quoteOnly: 'Highlight and Note',
                 }
             },
             'userTimezone': {
@@ -165,7 +179,7 @@ joplin.plugins.register({
             name: 'resetOmnivoreSyncData',
             label: 'Reset Omnivore Sync Data',
             execute: async () => {
-                const result = await joplin.views.dialogs.showMessageBox('Are you sure you want to reset the Omnivore sync data? This will clear the last sync date, all synced item IDs, and synced highlights. The next sync will fetch all articles and highlights again.\n\nPress OK to confirm, or Cancel to abort.');
+                const result = await joplin.views.dialogs.showMessageBox('Are you sure you want to reset the Omnivore Sync internal data? This will clear the last sync date and all synced article/highlight IDs (Notes are NOT deleted). The next sync will fetch all articles and highlights again.\n\nPress OK to confirm, or Cancel to abort.');
 
                 if (result === 0) { // User clicked 'OK'
                     await joplin.settings.setValue('lastSyncDate', '');
