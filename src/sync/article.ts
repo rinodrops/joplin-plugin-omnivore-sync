@@ -7,8 +7,8 @@ import { Article, SyncedArticle } from '../types';
 import { OmnivoreClient } from '../api/omnivore';
 import { logger } from '../logger';
 
-export async function syncArticles(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string): Promise<{newLastSyncDate: string, syncedArticles: SyncedArticle[]}> {
-    const articles = await client.getArticles(lastSyncDate);
+export async function syncArticles(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, labels: string[] = []): Promise<{newLastSyncDate: string, syncedArticles: SyncedArticle[]}> {
+    const articles = await client.getArticles(lastSyncDate, labels);
     await logger.debug(`Retrieved ${articles.length} articles from Omnivore`);
 
     let newLastSyncDate = lastSyncDate;

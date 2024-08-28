@@ -70,6 +70,22 @@ joplin.plugins.register({
                 label: 'Target Notebook',
                 description: 'Name of the notebook to sync Omnivore articles to'
             },
+            'articleLabels': {
+                value: '',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Article Labels',
+                description: 'Comma-separated list of labels for articles to sync (leave empty to sync all)'
+            },
+            'highlightLabels': {
+                value: '',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Highlight Labels',
+                description: 'Comma-separated list of labels for highlights to sync (leave empty to sync all)'
+            },
             'highlightTemplateChoice': {
                 value: 'default',
                 type: SettingItemType.String,
@@ -216,17 +232,20 @@ async function performSync(client: OmnivoreClient) {
     await logger.debug(`Last sync date: ${lastSyncDate}`);
     await logger.debug(`Sync type: ${syncType}`);
 
+    const articleLabels = (await joplin.settings.value('articleLabels') as string).split(',').map(label => label.trim()).filter(Boolean);
+    const highlightLabels = (await joplin.settings.value('highlightLabels') as string).split(',').map(label => label.trim()).filter(Boolean);
+
     try {
         let newLastSyncDate = lastSyncDate;
 
         if (syncType === SyncType.All || syncType === SyncType.Articles) {
-            const articleResult = await syncArticles(client, turndownService, lastSyncDate);
+            const articleResult = await syncArticles(client, turndownService, lastSyncDate, articleLabels);
             newLastSyncDate = articleResult.newLastSyncDate;
             await joplin.settings.setValue('syncedArticles', JSON.stringify(articleResult.syncedArticles));
         }
 
         if (syncType === SyncType.All || syncType === SyncType.Highlights) {
-            const highlightResult = await syncHighlights(client, turndownService, lastSyncDate, highlightSyncPeriod);
+            const highlightResult = await syncHighlights(client, turndownService, lastSyncDate, highlightSyncPeriod, highlightLabels);
             if (new Date(highlightResult.newLastSyncDate) > new Date(newLastSyncDate)) {
                 newLastSyncDate = highlightResult.newLastSyncDate;
             }

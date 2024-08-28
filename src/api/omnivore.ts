@@ -12,12 +12,16 @@ export class OmnivoreClient {
         this.client = new Omnivore(config);
     }
 
-    async getArticles(since: string): Promise<Article[]> {
+    async getArticles(since: string, labels: string[] = []): Promise < Article[] > {
         try {
             const sinceDate = since ? new Date(since).toISOString().split('T')[0] : '';
             await logger.debug(`Fetching articles since: ${sinceDate || 'the beginning'}`);
 
-            const query = `${sinceDate ? `saved:${sinceDate}..*` : ''} sort:saved-asc`;
+            let query = `${sinceDate ? `saved:${sinceDate}..*` : ''} sort:saved-asc`;
+            if (labels.length > 0) {
+                const labelQuery = labels.map(label => `label:"${label}"`).join(' OR ');
+                query += ` (${labelQuery})`;
+            }
             await logger.debug(`Using query: ${query}`);
 
             let allArticles: Article[] = [];
@@ -61,19 +65,24 @@ export class OmnivoreClient {
         }
     }
 
-    async getHighlights(since: string, syncPeriod: number): Promise<Highlight[]> {
+    async getHighlights(since: string, syncPeriod: number, labels: string[] = []): Promise<Highlight[]> {
         try {
             const sinceDate = new Date(since);
-            const oldestDate = new Date();
-            oldestDate.setDate(oldestDate.getDate() - syncPeriod);
+        const oldestDate = new Date();
+        oldestDate.setDate(oldestDate.getDate() - syncPeriod);
 
-            const queryDate = oldestDate < sinceDate ? oldestDate : sinceDate;
-            const formattedDate = queryDate.toISOString().split('T')[0];
+        const queryDate = oldestDate < sinceDate ? oldestDate : sinceDate;
+        const formattedDate = queryDate.toISOString().split('T')[0];
 
-            await logger.debug(`Fetching highlights for articles saved since: ${formattedDate}`);
+        await logger.debug(`Fetching highlights for articles saved since: ${formattedDate}`);
 
-            const query = `saved:${formattedDate}..* sort:saved-asc has:highlights`;
-            await logger.debug(`Using query: ${query}`);
+        let query = `saved:${formattedDate}..* sort:saved-asc has:highlights`;
+        if (labels.length > 0) {
+            const labelQuery = labels.map(label => `label:"${label}"`).join(' OR ');
+            query += ` (${labelQuery})`;
+        }
+        await logger.debug(`Using query: ${query}`);
+
 
             let allHighlights: Highlight[] = [];
             let hasNextPage = true;

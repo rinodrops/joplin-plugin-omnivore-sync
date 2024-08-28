@@ -28,9 +28,8 @@ const HIGHLIGHT_TEMPLATES = {
     `
 };
 
-export async function syncHighlights(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, syncPeriod: number): Promise < { newLastSyncDate: string, syncedHighlights: {
-        [key: string]: string[] } } > {
-    const highlights = await client.getHighlights(lastSyncDate, syncPeriod);
+export async function syncHighlights(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, syncPeriod: number, labels: string[] = []): Promise<{ newLastSyncDate: string, syncedHighlights: { [key: string]: string[] } }> {
+    const highlights = await client.getHighlights(lastSyncDate, syncPeriod, labels);
     await logger.debug(`Retrieved ${highlights.length} highlights from Omnivore`);
 
     const userTimezone = await joplin.settings.value('userTimezone') || 'local';
