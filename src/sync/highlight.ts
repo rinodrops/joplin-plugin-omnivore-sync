@@ -34,7 +34,7 @@ const HIGHLIGHT_TEMPLATES = {
     `
 };
 
-export async function syncHighlights(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, syncPeriod: number, labels: string[] = []): Promise<{ newLastSyncDate: string, syncedHighlights: { [key: string]: string[] } }> {
+export async function syncHighlights(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, syncPeriod: number, labels: string[], targetFolderId: string): Promise<{ newLastSyncDate: string, syncedHighlights: { [key: string]: string[] } }> {
     const highlights = await client.getHighlights(lastSyncDate, syncPeriod, labels);
     await logger.debug(`Retrieved ${highlights.length} highlights from Omnivore`);
 
@@ -44,19 +44,27 @@ export async function syncHighlights(client: OmnivoreClient, turndownService: Tu
     let newLastSyncDate = lastSyncDate;
     let newItemsCount = 0;
 
-    const highlightGrouping = await joplin.settings.value('highlightGrouping');
-    const groupedHighlights = groupHighlights(highlights, highlightGrouping, userTimezone);
+    // Cache to store notes we've already created or found during this sync
+    const noteCache: { [key: string]: any } = {};
 
-    for (const [groupKey, groupHighlights] of Object.entries(groupedHighlights)) {
-        await syncGroupedHighlights(groupKey, groupHighlights, syncedHighlights, turndownService, userTimezone, highlightGrouping);
-        newItemsCount += groupHighlights.length;
+    for (const highlight of highlights) {
+        const highlightDate = DateTime.fromISO(highlight.createdAt).setZone(userTimezone).toFormat('yyyy-MM-dd');
+        await logger.debug(`Processing highlight ${highlight.id} for date ${highlightDate}`);
 
-        const latestHighlightDate = groupHighlights.reduce((latest, highlight) => {
-            return new Date(highlight.createdAt) > new Date(latest) ? highlight.createdAt : latest;
-        }, lastSyncDate);
+        if (!syncedHighlights[highlightDate]) {
+            syncedHighlights[highlightDate] = [];
+        }
 
-        if (new Date(latestHighlightDate) > new Date(newLastSyncDate)) {
-            newLastSyncDate = latestHighlightDate;
+        if (!syncedHighlights[highlightDate].includes(highlight.id)) {
+            await syncHighlightToJoplin(highlight, turndownService, userTimezone, noteCache, targetFolderId);
+            syncedHighlights[highlightDate].push(highlight.id);
+            newItemsCount++;
+            if (new Date(highlight.createdAt) > new Date(newLastSyncDate)) {
+                newLastSyncDate = highlight.createdAt;
+            }
+            await logger.debug(`Synced highlight ${highlight.id}`);
+        } else {
+            await logger.debug(`Skipping already synced highlight: ${highlight.id}`);
         }
     }
 
@@ -66,8 +74,7 @@ export async function syncHighlights(client: OmnivoreClient, turndownService: Tu
     return { newLastSyncDate, syncedHighlights };
 }
 
-async function syncHighlightToJoplin(highlight: Highlight, turndownService: TurndownService, userTimezone: string, noteCache: {
-    [key: string]: any }) {
+async function syncHighlightToJoplin(highlight: Highlight, turndownService: TurndownService, userTimezone: string, noteCache: { [key: string]: any }, targetFolderId: string) {
     await logger.debug(`Syncing highlight: ${highlight.id}`);
     try {
         const highlightDateTime = DateTime.fromISO(highlight.createdAt).setZone(userTimezone);
@@ -82,7 +89,7 @@ async function syncHighlightToJoplin(highlight: Highlight, turndownService: Turn
             existingNote = noteCache[highlightDate];
             await logger.debug(`Using cached note for ${highlightDate}`);
         } else {
-            existingNote = await getOrCreateHighlightNote(noteTitle);
+            existingNote = await getOrCreateHighlightNote(noteTitle, targetFolderId);
             noteCache[highlightDate] = existingNote;
             await logger.debug(`Created or found note for ${highlightDate}: ${existingNote.id}`);
         }
@@ -119,7 +126,7 @@ function groupHighlights(highlights: Highlight[], groupingType: string, userTime
     return grouped;
 }
 
-async function syncGroupedHighlights(groupKey: string, highlights: Highlight[], syncedHighlights: { [key: string]: string[] }, turndownService: TurndownService, userTimezone: string, groupingType: string) {
+async function syncGroupedHighlights(groupKey: string, highlights: Highlight[], syncedHighlights: { [key: string]: string[] }, turndownService: TurndownService, userTimezone: string, groupingType: string, targetFolderId: string) {
     const titlePrefix = await joplin.settings.value('highlightTitlePrefix');
     let noteTitle;
 
@@ -129,7 +136,7 @@ async function syncGroupedHighlights(groupKey: string, highlights: Highlight[], 
         noteTitle = `${titlePrefix} ${groupKey}`;
     }
 
-    let existingNote = await getOrCreateHighlightNote(noteTitle);
+    let existingNote = await getOrCreateHighlightNote(noteTitle, targetFolderId);
 
     if (groupingType === 'byArticle') {
         highlights.sort((a, b) => (a.highlightPositionPercent || 0) - (b.highlightPositionPercent || 0));
@@ -177,7 +184,7 @@ async function appendHighlightsToNote(noteId: string, newContent: string) {
     await joplin.data.put(['notes', noteId], null, { body: updatedBody });
 }
 
-async function getOrCreateHighlightNote(title: string): Promise < any > {
+async function getOrCreateHighlightNote(title: string, targetFolderId: string): Promise<any> {
     const searchResult = await joplin.data.get(['search'], { query: `"${title}"`, fields: ['id', 'title', 'body'] });
 
     if (searchResult && Array.isArray(searchResult.items) && searchResult.items.length > 0) {
@@ -187,15 +194,14 @@ async function getOrCreateHighlightNote(title: string): Promise < any > {
         }
         return searchResult.items[0];
     } else {
-        const targetNotebook = await joplin.settings.value('targetNotebook');
-        const folderItem = await getOrCreateNotebook(targetNotebook);
         return await joplin.data.post(['notes'], null, {
-            parent_id: folderItem.id,
+            parent_id: targetFolderId,
             title: title,
             body: ''
         });
     }
 }
+
 
 async function mergeHighlightNotes(notes: any[]): Promise < any > {
     const mergedBody = notes.map(note => note.body).join('\n\n---\n\n');

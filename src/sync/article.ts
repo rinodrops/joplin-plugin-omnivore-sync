@@ -7,7 +7,7 @@ import { Article, SyncedArticle } from '../types';
 import { OmnivoreClient } from '../api/omnivore';
 import { logger } from '../logger';
 
-export async function syncArticles(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, labels: string[] = []): Promise<{newLastSyncDate: string, syncedArticles: SyncedArticle[]}> {
+export async function syncArticles(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, labels: string[], targetFolderId: string): Promise<{newLastSyncDate: string, syncedArticles: SyncedArticle[]}> {
     const articles = await client.getArticles(lastSyncDate, labels);
     await logger.debug(`Retrieved ${articles.length} articles from Omnivore`);
 
@@ -17,7 +17,7 @@ export async function syncArticles(client: OmnivoreClient, turndownService: Turn
 
     for (const article of articles) {
         if (!syncedArticles.some(item => item.id === article.id)) {
-            await syncArticleToJoplin(article, turndownService);
+            await syncArticleToJoplin(article, turndownService, targetFolderId);
             syncedArticles.push({ id: article.id, savedAt: article.savedAt });
             newItemsCount++;
             if (new Date(article.savedAt) > new Date(newLastSyncDate)) {
@@ -27,20 +27,16 @@ export async function syncArticles(client: OmnivoreClient, turndownService: Turn
     }
 
     await logger.info(`Synced ${newItemsCount} new articles from Omnivore.`);
-    await joplin.settings.setValue('syncedArticles', JSON.stringify(syncedArticles));
-
     return { newLastSyncDate, syncedArticles };
 }
 
-async function syncArticleToJoplin(article: Article, turndownService: TurndownService) {
+async function syncArticleToJoplin(article: Article, turndownService: TurndownService, targetFolderId: string) {
     await logger.debug(`Syncing new article: ${article.title}`);
     try {
         const markdown = turndownService.turndown(article.content);
-        const targetNotebook = await joplin.settings.value('targetNotebook');
-        const folderItem = await getOrCreateNotebook(targetNotebook);
 
         await joplin.data.post(['notes'], null, {
-            parent_id: folderItem.id,
+            parent_id: targetFolderId,
             title: article.title,
             body: markdown,
             author: 'Omnivore Sync',
@@ -50,16 +46,6 @@ async function syncArticleToJoplin(article: Article, turndownService: TurndownSe
         await logger.debug(`Successfully synced article: ${article.title}`);
     } catch (error) {
         await logger.error(`Error syncing article ${article.title}: ${error.message}`);
-    }
-}
-
-async function getOrCreateNotebook(notebookName: string): Promise<any> {
-    const folders = await joplin.data.get(['folders']);
-    const existingFolder = folders.items.find(folder => folder.title === notebookName);
-    if (existingFolder) {
-        return existingFolder;
-    } else {
-        return await joplin.data.post(['folders'], null, { title: notebookName });
     }
 }
 

@@ -2,6 +2,7 @@
 // Aug 2024 by Rino, eMotionGraphics Inc.
 
 import joplin from 'api';
+import { setTimeout } from 'timers/promises';
 import { MenuItemLocation, SettingItemType } from 'api/types';
 import { OmnivoreClient } from './api/omnivore';
 import { syncArticles, cleanupOldArticles } from './sync/article';
@@ -237,6 +238,7 @@ async function performSync(client: OmnivoreClient) {
     let lastSyncDate = await joplin.settings.value('lastSyncDate');
     const syncType = await joplin.settings.value('syncType') as SyncType;
     const highlightSyncPeriod = await joplin.settings.value('highlightSyncPeriod');
+    const targetNotebook = await joplin.settings.value('targetNotebook');
 
     if (!lastSyncDate) {
         lastSyncDate = new Date(0).toISOString();
@@ -246,20 +248,24 @@ async function performSync(client: OmnivoreClient) {
     await logger.debug(`Last sync date: ${lastSyncDate}`);
     await logger.debug(`Sync type: ${syncType}`);
 
-    const articleLabels = (await joplin.settings.value('articleLabels') as string).split(',').map(label => label.trim()).filter(Boolean);
-    const highlightLabels = (await joplin.settings.value('highlightLabels') as string).split(',').map(label => label.trim()).filter(Boolean);
-
     try {
+        // Check for the target folder and create it if it doesn't exist, with retry mechanism
+        const targetFolder = await getOrCreateNotebook(targetNotebook);
+        await logger.info(`Target folder confirmed: ${targetFolder.title} (ID: ${targetFolder.id})`);
+
         let newLastSyncDate = lastSyncDate;
 
+        const articleLabels = (await joplin.settings.value('articleLabels') as string).split(',').map(label => label.trim()).filter(Boolean);
+        const highlightLabels = (await joplin.settings.value('highlightLabels') as string).split(',').map(label => label.trim()).filter(Boolean);
+
         if (syncType === SyncType.All || syncType === SyncType.Articles) {
-            const articleResult = await syncArticles(client, turndownService, lastSyncDate, articleLabels);
+            const articleResult = await syncArticles(client, turndownService, lastSyncDate, articleLabels, targetFolder.id);
             newLastSyncDate = articleResult.newLastSyncDate;
             await joplin.settings.setValue('syncedArticles', JSON.stringify(articleResult.syncedArticles));
         }
 
         if (syncType === SyncType.All || syncType === SyncType.Highlights) {
-            const highlightResult = await syncHighlights(client, turndownService, lastSyncDate, highlightSyncPeriod, highlightLabels);
+            const highlightResult = await syncHighlights(client, turndownService, lastSyncDate, highlightSyncPeriod, highlightLabels, targetFolder.id);
             if (new Date(highlightResult.newLastSyncDate) > new Date(newLastSyncDate)) {
                 newLastSyncDate = highlightResult.newLastSyncDate;
             }
@@ -277,4 +283,38 @@ async function performSync(client: OmnivoreClient) {
     } catch (error) {
         await logger.error(`Error during sync: ${error.message}`);
     }
+}
+
+async function getOrCreateNotebook(notebookName: string, maxRetries = 5): Promise<any> {
+    const sanitizedName = notebookName.trim();
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const folders = await joplin.data.get(['folders']);
+            const existingFolder = folders.items.find(folder =>
+                folder.title.toLowerCase() === sanitizedName.toLowerCase()
+            );
+
+            if (existingFolder) {
+                await logger.info(`Found existing folder: ${sanitizedName}`);
+                return existingFolder;
+            } else if (attempt === 0) {
+                // Only try to create the folder on the first attempt
+                await logger.info(`Attempting to create folder: ${sanitizedName}`);
+                await joplin.data.post(['folders'], null, { title: sanitizedName });
+                // Don't return immediately, continue to next iteration to verify creation
+            } else {
+                await logger.warn(`Folder not found on attempt ${attempt + 1}: ${sanitizedName}`);
+            }
+        } catch (error) {
+            await logger.error(`Error on attempt ${attempt + 1} for folder ${sanitizedName}: ${error.message}`);
+        }
+
+        // Exponential backoff
+        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s, 8s, 16s
+        await logger.info(`Waiting ${delay}ms before retry...`);
+        await setTimeout(delay);
+    }
+
+    throw new Error(`Failed to create or find folder ${sanitizedName} after ${maxRetries} attempts`);
 }
