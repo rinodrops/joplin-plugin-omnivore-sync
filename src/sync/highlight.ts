@@ -11,26 +11,26 @@ import { logger } from '../logger';
 
 const HIGHLIGHT_TEMPLATES = {
     default: `
-**{{article.title}}**
+**{{{article.title}}}**
 
-> {{quote}}{{#annotation}}
-> **Note**: {{annotation}}{{/annotation}}
-> ({{createdAt}})
+> {{{quote}}}{{#annotation}}
+> **Note**: {{{annotation}}}{{/annotation}}
+> ({{{createdAt}}})
 
-**Author**: {{article.author}}
-**Published**: {{article.publishedAt}}
-**URL**: [Omnivore]({{article.omnivoreUrl}}), [Original]({{article.originalArticleUrl}})
+**Author**: {{{article.author}}}
+**Published**: {{{article.publishedAt}}}
+**URL**: [Omnivore]({{{article.omnivoreUrl}}}), [Original]({{{article.originalArticleUrl}}})
     `,
     titleQuote: `
-[{{article.title}}]({{article.omnivoreUrl}})
-> {{quote}}{{#annotation}}
-> **Note**: {{annotation}}{{/annotation}}
-> ({{createdAt}})
+[{{{article.title}}}]({{{article.omnivoreUrl}}})
+> {{{quote}}}{{#annotation}}
+> **Note**: {{{annotation}}}{{/annotation}}
+> ({{{createdAt}}})
     `,
     quoteOnly: `
-> {{quote}}{{#annotation}}
-> **Note**: {{annotation}}{{/annotation}}
-> ({{createdAt}})
+> {{{quote}}}{{#annotation}}
+> **Note**: {{{annotation}}}{{/annotation}}
+> ({{{createdAt}}})
     `
 };
 
@@ -192,8 +192,8 @@ async function appendHighlightToNote(noteId: string, newHighlightContent: string
     let highlights = note.body ? note.body.split('\n\n---\n\n').filter(h => h.trim() !== '') : [];
     await logger.debug(`Existing highlights in note: ${highlights.length}`);
 
-    // Decode HTML entities in the new highlight content
-    newHighlightContent = decodeHtmlEntities(newHighlightContent);
+    // Decode and clean HTML entities in the new highlight content
+    newHighlightContent = decodeAndCleanText(newHighlightContent);
 
     // Extract creation time and a portion of the content for comparison
     const newHighlightCreationTime = newHighlightContent.match(/\((\d{4}-\d{2}-\d{2} \d{2}:\d{2})\)/)?.[1] || '';
@@ -243,19 +243,30 @@ function renderHighlightContent(highlight: Highlight, template: string, userTime
         omnivoreUrl += highlight.id;
     }
 
-    return Mustache.render(template, {
+    // Decode and clean all text fields before passing to Mustache
+    const cleanTitle = decodeAndCleanText(highlight.article.title);
+    const cleanAuthor = decodeAndCleanText(highlight.article.author || 'Unknown');
+    const cleanOmnivoreUrl = decodeAndCleanText(omnivoreUrl);
+    const cleanOriginalUrl = decodeAndCleanText(highlight.article.originalArticleUrl || highlight.article.url);
+    const cleanQuote = turndownService.turndown(decodeAndCleanText(highlight.quote));
+    const cleanAnnotation = highlight.annotation ? turndownService.turndown(decodeAndCleanText(highlight.annotation)) : null;
+
+    const renderResult = decodeAndCleanText(Mustache.render(template, {
         article: {
-            title: decodeHtmlEntities(highlight.article.title),
-            author: decodeHtmlEntities(highlight.article.author || 'Unknown'),
+            title: cleanTitle,
+            author: cleanAuthor,
             publishedAt: highlight.article.publishedAt ?
                 DateTime.fromISO(highlight.article.publishedAt).setZone(userTimezone).toFormat('yyyy-MM-dd HH:mm') : 'Unknown',
-            omnivoreUrl: decodeHtmlEntities(omnivoreUrl),
-            originalArticleUrl: decodeHtmlEntities(highlight.article.originalArticleUrl || highlight.article.url)
+            omnivoreUrl: cleanOmnivoreUrl,
+            originalArticleUrl: cleanOriginalUrl
         },
-        quote: decodeHtmlEntities(turndownService.turndown(highlight.quote)),
-        annotation: highlight.annotation ? decodeHtmlEntities(turndownService.turndown(highlight.annotation)) : null,
+        quote: cleanQuote,
+        annotation: cleanAnnotation,
         createdAt: DateTime.fromISO(highlight.createdAt).setZone(userTimezone).toFormat('yyyy-MM-dd HH:mm')
-    });
+    }));
+
+    logger.debug(`Mustache render result: ${renderResult}`);
+    return renderResult;
 }
 
 async function getOrCreateNotebook(notebookName: string): Promise < any > {
@@ -296,14 +307,28 @@ export async function cleanupHighlightNotes() {
     }
 }
 
-export function decodeHtmlEntities(text: string): string {
-    const entities = {
+export function decodeAndCleanText(text: string): string {
+    const htmlEntities: { [key: string]: string } = {
         '&amp;': '&',
         '&lt;': '<',
         '&gt;': '>',
         '&quot;': '"',
-        '&#39;': "'"
+        '&#39;': "'",
+        '&#x2F;': '/',
+        '&#x60;': '`'
     };
-    return text.replace(/&#x([0-9A-Fa-f]+);/g, (match, dec) => String.fromCharCode(parseInt(dec, 16)))
-        .replace(/&[#A-Za-z0-9]+;/g, entity => entities[entity] || entity);
+
+    return text
+        .replace(/&(#x?[0-9A-Fa-f]+|[A-Za-z]+);/g, (match, entity) => {
+            if (entity[0] === '#') {
+                const code = entity[1].toLowerCase() === 'x'
+                    ? parseInt(entity.slice(2), 16)
+                    : parseInt(entity.slice(1), 10);
+                return String.fromCharCode(code);
+            }
+            return htmlEntities[match] || match;
+        })
+        .replace(/\\([\[\]_])/g, '$1')
+        .replace(/\\(.)/g, '$1')
+        .replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
