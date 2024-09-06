@@ -13,8 +13,11 @@ const HIGHLIGHT_TEMPLATES = {
     default: `
 **{{{article.title}}}**
 
-> {{{quote}}}{{#annotation}}
-> **Note**: {{{annotation}}}{{/annotation}}
+{{{quote}}}
+{{#annotation}}
+> **Note**:
+{{{annotation}}}
+{{/annotation}}
 > ({{{createdAt}}})
 
 **Author**: {{{article.author}}}
@@ -23,13 +26,20 @@ const HIGHLIGHT_TEMPLATES = {
     `,
     titleQuote: `
 [{{{article.title}}}]({{{article.omnivoreUrl}}})
-> {{{quote}}}{{#annotation}}
-> **Note**: {{{annotation}}}{{/annotation}}
+
+{{{quote}}}
+{{#annotation}}
+> **Note**:
+{{{annotation}}}
+{{/annotation}}
 > ({{{createdAt}}})
     `,
     quoteOnly: `
-> {{{quote}}}{{#annotation}}
-> **Note**: {{{annotation}}}{{/annotation}}
+{{{quote}}}
+{{#annotation}}
+> **Note**:
+{{{annotation}}}
+{{/annotation}}
 > ({{{createdAt}}})
     `
 };
@@ -248,8 +258,20 @@ function renderHighlightContent(highlight: Highlight, template: string, userTime
     const cleanAuthor = decodeAndCleanText(highlight.article.author || 'Unknown');
     const cleanOmnivoreUrl = decodeAndCleanText(omnivoreUrl);
     const cleanOriginalUrl = decodeAndCleanText(highlight.article.originalArticleUrl || highlight.article.url);
-    const cleanQuote = turndownService.turndown(decodeAndCleanText(highlight.quote));
-    const cleanAnnotation = highlight.annotation ? turndownService.turndown(decodeAndCleanText(highlight.annotation)) : null;
+
+    // Clean and format the quote
+    const cleanQuote = decodeAndCleanText(highlight.quote)
+        .split('\n')
+        .map(line => line.trim() ? `> ${line}` : '>')
+        .join('\n');
+
+    // Clean and format the annotation (if it exists)
+    const cleanAnnotation = highlight.annotation
+        ? decodeAndCleanText(highlight.annotation)
+            .split('\n')
+            .map(line => line.trim() ? `> ${line}` : '>')
+            .join('\n')
+        : null;
 
     const renderResult = decodeAndCleanText(Mustache.render(template, {
         article: {
@@ -265,7 +287,6 @@ function renderHighlightContent(highlight: Highlight, template: string, userTime
         createdAt: DateTime.fromISO(highlight.createdAt).setZone(userTimezone).toFormat('yyyy-MM-dd HH:mm')
     }));
 
-    logger.debug(`Mustache render result: ${renderResult}`);
     return renderResult;
 }
 
