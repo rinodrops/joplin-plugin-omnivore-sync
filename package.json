@@ -1,6 +1,6 @@
 {
   "name": "joplin-plugin-omnivore-sync",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "scripts": {
     "dist": "webpack --env joplin-plugin-config=buildMain && webpack --env joplin-plugin-config=buildExtraScripts && webpack --env joplin-plugin-config=createArchive",
     "prepare": "npm run dist",
@@ -32,6 +32,7 @@
     "@omnivore-app/api": "^1.0.0",
     "luxon": "^3.5.0",
     "mustache": "^4.2.0",
-    "turndown": "^7.1.1"
+    "turndown": "^7.1.1",
+    "node-fetch": "^2.6.7"
   }
 }
