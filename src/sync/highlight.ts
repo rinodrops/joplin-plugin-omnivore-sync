@@ -62,7 +62,7 @@ export async function syncHighlights(client: OmnivoreClient, turndownService: Tu
     const noteCache: { [key: string]: any } = {};
 
     for (const [groupKey, groupHighlights] of Object.entries(groupedHighlights)) {
-        await syncGroupedHighlights(groupKey, groupHighlights, syncedHighlights, turndownService, userTimezone, highlightGrouping, targetFolderId, noteCache);
+    await syncGroupedHighlights(groupKey, groupHighlights, syncedHighlights, turndownService, userTimezone, highlightGrouping, targetFolderId, noteCache);
 
         newItemsCount += groupHighlights.length;
         const latestHighlightDate = groupHighlights.reduce((latest, highlight) => {
@@ -164,12 +164,16 @@ async function appendHighlightsToNote(noteId: string, newContent: string) {
 }
 
 async function getOrCreateHighlightNote(title: string, targetFolderId: string): Promise<any> {
-    const searchResult = await joplin.data.get(['search'], { query: `"${title}"`, fields: ['id', 'title', 'body'] });
+    const searchResult = await joplin.data.get(['search'], { query: `"${title}"`, fields: ['id', 'title', 'body', 'parent_id'] });
 
     if (searchResult && Array.isArray(searchResult.items) && searchResult.items.length > 0) {
         // If multiple notes exist for the same day, merge them
         if (searchResult.items.length > 1) {
-            return await mergeHighlightNotes(searchResult.items);
+            return await mergeHighlightNotes(searchResult.items, targetFolderId);
+        }
+        // If the note exists but is in a different folder, move it to the correct folder
+        if (searchResult.items[0].parent_id !== targetFolderId) {
+            await joplin.data.put(['notes', searchResult.items[0].id], null, { parent_id: targetFolderId });
         }
         return searchResult.items[0];
     } else {
@@ -181,11 +185,14 @@ async function getOrCreateHighlightNote(title: string, targetFolderId: string): 
     }
 }
 
-
-async function mergeHighlightNotes(notes: any[]): Promise < any > {
+async function mergeHighlightNotes(notes: any[], targetFolderId: string): Promise<any> {
     const mergedBody = notes.map(note => note.body).join('\n\n---\n\n');
     const firstNote = notes[0];
-    await joplin.data.put(['notes', firstNote.id], null, { body: mergedBody, title: firstNote.title });
+    await joplin.data.put(['notes', firstNote.id], null, {
+        body: mergedBody,
+        title: firstNote.title,
+        parent_id: targetFolderId
+    });
 
     // Delete other notes
     for (let i = 1; i < notes.length; i++) {
@@ -303,15 +310,14 @@ async function getOrCreateNotebook(notebookName: string): Promise < any > {
 export async function cleanupHighlightNotes() {
     const titlePrefix = await joplin.settings.value('highlightTitlePrefix');
     const searchQuery = `${titlePrefix}*`;
-    const searchResult = await joplin.data.get(['search'], { query: searchQuery, fields: ['id', 'title', 'body'] });
+    const searchResult = await joplin.data.get(['search'], { query: searchQuery, fields: ['id', 'title', 'body', 'parent_id'] });
     if (!searchResult || !Array.isArray(searchResult.items)) {
         await logger.debug('No highlight notes found or invalid search result');
         return;
     }
 
     const highlightNotes = searchResult.items;
-    const notesByDate: {
-        [key: string]: any[] } = {};
+    const notesByDate: { [key: string]: any[] } = {};
 
     for (const note of highlightNotes) {
         const datePart = note.title.replace(`${titlePrefix}`, '');
@@ -323,7 +329,9 @@ export async function cleanupHighlightNotes() {
 
     for (const [date, notes] of Object.entries(notesByDate)) {
         if (notes.length > 1) {
-            await mergeHighlightNotes(notes);
+            // Get the parent_id of the first note to use as the target folder
+            const targetFolderId = notes[0].parent_id;
+            await mergeHighlightNotes(notes, targetFolderId);
         }
     }
 }

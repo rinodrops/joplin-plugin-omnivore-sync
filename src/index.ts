@@ -68,8 +68,24 @@ joplin.plugins.register({
                 type: SettingItemType.String,
                 section: 'omnivoreSync',
                 public: true,
-                label: 'Target Notebook',
+                label: 'Main Omnivore Notebook',
                 description: 'Name of the notebook to sync Omnivore articles to'
+            },
+            'articleSubNotebook': {
+                value: '',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Article Sub-Notebook',
+                description: 'Name of the sub-notebook for articles within the main Omnivore notebook. Leave empty to store articles directly in the main notebook.'
+            },
+            'highlightSubNotebook': {
+                value: '',
+                type: SettingItemType.String,
+                section: 'omnivoreSync',
+                public: true,
+                label: 'Highlight Sub-Notebook',
+                description: 'Name of the sub-notebook for highlights within the main Omnivore notebook. Leave empty to store highlights directly in the main notebook.'
             },
             'articleLabels': {
                 value: '',
@@ -249,9 +265,23 @@ async function performSync(client: OmnivoreClient) {
     await logger.debug(`Sync type: ${syncType}`);
 
     try {
-        // Check for the target folder and create it if it doesn't exist, with retry mechanism
-        const targetFolder = await getOrCreateNotebook(targetNotebook);
-        await logger.info(`Target folder confirmed: ${targetFolder.title} (ID: ${targetFolder.id})`);
+        // Check for the main target folder and create it if it doesn't exist
+        const mainTargetFolder = await getOrCreateNotebook(targetNotebook);
+        await logger.info(`Main target folder confirmed: ${mainTargetFolder.title} (ID: ${mainTargetFolder.id})`);
+
+        // Check for article sub-notebook and create if needed
+        const articleSubNotebookName = await joplin.settings.value('articleSubNotebook');
+        const articleTargetFolder = articleSubNotebookName
+            ? await getOrCreateNotebook(articleSubNotebookName, mainTargetFolder.id)
+            : mainTargetFolder;
+        await logger.info(`Article target folder confirmed: ${articleTargetFolder.title} (ID: ${articleTargetFolder.id})`);
+
+        // Check for highlight sub-notebook and create if needed
+        const highlightSubNotebookName = await joplin.settings.value('highlightSubNotebook');
+        const highlightTargetFolder = highlightSubNotebookName
+            ? await getOrCreateNotebook(highlightSubNotebookName, mainTargetFolder.id)
+            : mainTargetFolder;
+        await logger.info(`Highlight target folder confirmed: ${highlightTargetFolder.title} (ID: ${highlightTargetFolder.id})`);
 
         let newLastSyncDate = lastSyncDate;
 
@@ -259,13 +289,13 @@ async function performSync(client: OmnivoreClient) {
         const highlightLabels = (await joplin.settings.value('highlightLabels') as string).split(',').map(label => label.trim()).filter(Boolean);
 
         if (syncType === SyncType.All || syncType === SyncType.Articles) {
-            const articleResult = await syncArticles(client, turndownService, lastSyncDate, articleLabels, targetFolder.id);
+            const articleResult = await syncArticles(client, turndownService, lastSyncDate, articleLabels, articleTargetFolder.id);
             newLastSyncDate = articleResult.newLastSyncDate;
             await joplin.settings.setValue('syncedArticles', JSON.stringify(articleResult.syncedArticles));
         }
 
         if (syncType === SyncType.All || syncType === SyncType.Highlights) {
-            const highlightResult = await syncHighlights(client, turndownService, lastSyncDate, highlightSyncPeriod, highlightLabels, targetFolder.id);
+            const highlightResult = await syncHighlights(client, turndownService, lastSyncDate, highlightSyncPeriod, highlightLabels, highlightTargetFolder.id);
             if (new Date(highlightResult.newLastSyncDate) > new Date(newLastSyncDate)) {
                 newLastSyncDate = highlightResult.newLastSyncDate;
             }
@@ -285,14 +315,15 @@ async function performSync(client: OmnivoreClient) {
     }
 }
 
-async function getOrCreateNotebook(notebookName: string, maxRetries = 5): Promise<any> {
+async function getOrCreateNotebook(notebookName: string, parentId?: string, maxRetries = 5): Promise<any> {
     const sanitizedName = notebookName.trim();
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
             const folders = await joplin.data.get(['folders']);
             const existingFolder = folders.items.find(folder =>
-                folder.title.toLowerCase() === sanitizedName.toLowerCase()
+                folder.title.toLowerCase() === sanitizedName.toLowerCase() &&
+                (parentId ? folder.parent_id === parentId : true)
             );
 
             if (existingFolder) {
@@ -301,7 +332,10 @@ async function getOrCreateNotebook(notebookName: string, maxRetries = 5): Promis
             } else if (attempt === 0) {
                 // Only try to create the folder on the first attempt
                 await logger.info(`Attempting to create folder: ${sanitizedName}`);
-                await joplin.data.post(['folders'], null, { title: sanitizedName });
+                const newFolder = await joplin.data.post(['folders'], null, {
+                    title: sanitizedName,
+                    parent_id: parentId
+                });
                 // Don't return immediately, continue to next iteration to verify creation
             } else {
                 await logger.warn(`Folder not found on attempt ${attempt + 1}: ${sanitizedName}`);
@@ -318,3 +352,4 @@ async function getOrCreateNotebook(notebookName: string, maxRetries = 5): Promis
 
     throw new Error(`Failed to create or find folder ${sanitizedName} after ${maxRetries} attempts`);
 }
+

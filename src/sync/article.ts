@@ -10,6 +10,7 @@ import { logger } from '../logger';
 import { Buffer } from 'buffer';
 
 export async function syncArticles(client: OmnivoreClient, turndownService: TurndownService, lastSyncDate: string, labels: string[], targetFolderId: string): Promise<{newLastSyncDate: string, syncedArticles: SyncedArticle[]}> {
+
     const articles = await client.getArticles(lastSyncDate, labels);
     await logger.debug(`Retrieved ${articles.length} articles from Omnivore`);
 
