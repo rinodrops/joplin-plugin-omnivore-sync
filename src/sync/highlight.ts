@@ -105,9 +105,9 @@ async function syncGroupedHighlights(groupKey: string, highlights: Highlight[], 
     let noteTitle;
 
     if (groupingType === 'byArticle') {
-        noteTitle = `${titlePrefix} - ${highlights[0].article.title}`;
+        noteTitle = `${titlePrefix}${highlights[0].article.title}`;
     } else { // byDate
-        noteTitle = `${titlePrefix} ${groupKey}`;
+        noteTitle = `${titlePrefix}${groupKey}`;
     }
 
     let existingNote;
@@ -314,7 +314,7 @@ export async function cleanupHighlightNotes() {
         [key: string]: any[] } = {};
 
     for (const note of highlightNotes) {
-        const datePart = note.title.replace(`${titlePrefix} `, '');
+        const datePart = note.title.replace(`${titlePrefix}`, '');
         if (!notesByDate[datePart]) {
             notesByDate[datePart] = [];
         }

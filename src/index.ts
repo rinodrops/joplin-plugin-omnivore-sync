@@ -131,12 +131,12 @@ joplin.plugins.register({
                 description: 'Number of days to look back for new highlights'
             },
             'highlightTitlePrefix': {
-                value: 'Omnivore Highlights',
+                value: 'Omnivore Highlights - ',
                 type: SettingItemType.String,
                 section: 'omnivoreSync',
                 public: true,
                 label: 'Highlight Note Title Prefix',
-                description: 'Prefix for the title of highlight notes (followed by the date)'
+                description: 'Prefix for highlight note titles. Include any spaces or symbols you want to appear before the date or article title.'
             },
             'lastSyncDate': {
                 value: '',
