@@ -1,3 +1,9 @@
+> [!NOTE]  
+> I no longer use Joplin nor Omnivore, since the official Omnivore server shutting down in Oct 2024.
+> This script might work with the self-hosted server as well, since it uses the stock Omnivore API.
+> Please feel free to reuse this codebase if you're willing to enhance to support the self-hosted servers.
+> Thanks!
+
 # Joplin Omnivore Sync Plugin
 
 This plugin allows you to sync your [Omnivore](https://omnivore.app/) articles and highlights directly into [Joplin](https://joplinapp.org/), a free, open-source note taking and to-do application.
